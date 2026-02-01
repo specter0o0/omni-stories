@@ -1,0 +1,13 @@
+numpy
+soundfile
+transformers
+pyyaml
+python-dotenv
+torch
+Pillow
+requests
+yt-dlp
+onnxruntime
+phonemizer
+accelerate
+librosa

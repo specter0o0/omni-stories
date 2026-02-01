@@ -1,0 +1,57 @@
+# Rendering Preferences
+quality: 1080p
+aspect_ratio: "16:9" # Recommended: 9:16 for Shorts, 16:9 for YouTube
+background_fit: crop # crop / stretch / fit
+
+background_volume: 0%
+narration_volume: 100%
+
+# Thumbnail Preferences
+thumbnail_bg_blur: 50%
+thumbnail_font: Arial Black
+thumbnail_font_size: 150
+thumbnail_font_color: "#FFFFFF"
+thumbnail_font_shadow: false
+thumbnail_shadow_color: "#FFFFFF"
+thumbnail_strength: 75%
+thumbnail_glow: true
+thumbnail_glow_color: "#FFFFFF"
+thumbnail_glow_strength: 75%
+
+# Caption Preferences
+captions: true
+caption_max_words_per_line: 4
+caption_highlight_color: "#f8d568"
+caption_font: Arial Black
+caption_font_size: 100
+caption_position: center # center / bottom
+caption_font_color: "#FFFFFF"
+caption_font_shadow: true
+caption_shadow_color: "#FFFFFF"
+caption_strength: 75%
+caption_glow: true
+caption_glow_color: "#FFFFFF"
+caption_glow_strength: 75%
+caption_glow_darken_factor: 0.75 # 1.0 = same as highlight, 0.0 = black
+
+
+# Voice & TTS Preferences (ElevenLabs)
+voice_id: pNInz6obpgmqnzhlAYqc # Adam (default)
+voice_model: v2 # v2 / v3
+# NOTE: v3 requires a paid elevenlabs subscription, but it is recommended. You can add emotions and even sfx like [laughter] or [gun_shot]
+
+# Local TTS Preferences (Kokoro)
+kokoro_voice: am_adam # Alternative: af_bella
+
+# Database Settings
+max_db_entries: 500
+
+# System Paths (Hierarchy)
+system_paths:
+  data: .omni-stories-data
+  output: output
+  background_videos: .omni-stories-data/background_videos
+  models: .omni-stories-data/models
+  tts_generations: .omni-stories-data/tts_generations
+  database: .omni-stories-data/database.json
+  kokoro: .omni-stories-data/models/kokoro

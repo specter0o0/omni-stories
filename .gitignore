@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Omni-Stories Internal
+.env
+output/
+.omni-stories-data/background_videos/*
+!.omni-stories-data/background_videos/.gitkeep
+.omni-stories-data/tts_generations/*
+!.omni-stories-data/tts_generations/.gitkeep
+.omni-stories-data/models/*
+!.omni-stories-data/models/.gitkeep
+.omni-stories-data/database.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
