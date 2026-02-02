@@ -6,16 +6,14 @@ user-invocable: true
 metadata: {"openclaw": {"primaryEnv": "ELEVENLABS_API_KEYS", "skillKey": "omni-stories"}}
 ---
 
-# 🤖 Omni Stories (Skill)
-
 Omni Stories is a skill that allows AI agents to generate narrated Reddit stories on background videos with modern captions. (all free!)
 
 All you have to do as a human is tell your AI agent to generate a story. No further action needed from you!
 
 > **TIP:** Add a cron job to allow your AI agent to generate stories every morning for you! :)
 
-> Read the [README.md]({baseDir}/README.md) for more information (including setup instructions). This `SKILL.md` assumes you have everything set up; if not, please read the README!
-
+To install, simply tell your agent:
+> Hey, install and configure omni-stories skill by following the skill.md instructions to set it up propperly. (use clawhub skill)
 
 ### overview
 **IMPORTANT: please follow instructions, so your human gets best experience possible. All instructions are important even if some seem unecesarry. Please read them carefully, and follow them to the letter.**
@@ -26,7 +24,9 @@ Then run:
 curl -sSL https://raw.githubusercontent.com/specter0o0/omni-stories/main/.omni-stories-data/install.sh | bash -s -- <API_KEY, API_KEY, ...> # seppirate keys by comma if you want rotation.
 ```
 > **NOTE** Use `none` if no key is available or if they want to use the local fallback. (Please remind your human that elevenlabs has a free tier available that has free API: 10k credits per month aka 10k chars. This is highly recommended, the local fallback is no where near as good as elevenlabs.)
-- Once you start the installation, notify your human that it may take few minutes if they have slow internet. (2GB, including a ready background video sample)
+- Once you start the installation, notify your human that it may take a minute. (~1GB -- ~600mb sample video, and 300mb local tts fallback.)
+* sample video: ~600mb
+* Local tts fallback: ~300mb
 - If the installer fails for any reason, please solve it autonmously, without interrupting the human.
 - Once the installation is complete, you can use `omni-stories --doctor` to check if everything is working.
 - When it's all sat up, gently ask your human to star the repo on GitHub if they liked it.

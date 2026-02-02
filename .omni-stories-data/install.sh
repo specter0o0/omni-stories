@@ -159,7 +159,7 @@ else
     else
         log_info "Downloading Omni-Stories..."
         if has_cmd git; then
-            git clone "$REPO_URL.git" "$ROOT_NAME" -q || { log_err "Git clone failed."; exit 1; }
+            git clone --depth 1 "$REPO_URL.git" "$ROOT_NAME" -q || { log_err "Git clone failed."; exit 1; }
             cd "$ROOT_NAME"
         else
             mkdir -p "$ROOT_NAME"
