@@ -45,7 +45,7 @@ try:
 except ImportError:
     pipeline = None
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 class TerminalUI:
     """ANSI-based terminal output formatting and interaction"""

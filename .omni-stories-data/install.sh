@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Omni-Stories v1.0.0 Setup Wizard
+# Omni-Stories v1.1.0 Setup Wizard
 # Universal, Zero-Failure, Fully Automated.
 # "It just works."
 
@@ -49,7 +49,7 @@ log_err()  { echo -e "${RED}[✖] $1${NC}"; }
 
 # Retry mechanism for network operations (3 attempts)
 retry_cmd() {
-    local -i retries=3
+    local -i retries=5
     local -i count=0
     until "$@"; do
         exit_code=$?
@@ -248,18 +248,18 @@ fi
 
 if [ ! -s "$MODEL_PATH" ]; then
     log_info "Downloading Kokoro TTS Model (330MB)..."
-    retry_cmd curl -L -# "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx" --output "$MODEL_PATH"
+    retry_cmd curl -L --connect-timeout 10 -# "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx" --output "$MODEL_PATH"
 fi
 
 if [ ! -s "$VOCAB_PATH" ]; then
      log_info "Downloading Tokenizer Config..."
-     retry_cmd curl -L -s "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/config.json" --output "$VOCAB_PATH"
+     retry_cmd curl -L --connect-timeout 10 -s "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/config.json" --output "$VOCAB_PATH"
 fi
 
 if [ ! -s "$VOICE_BIN_PATH" ]; then
     if [ ! -s "$VOICE_PT_PATH" ]; then
          log_info "Downloading Voice Model (am_adam)..."
-         retry_cmd curl -L -s "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/am_adam.pt" --output "$VOICE_PT_PATH"
+         retry_cmd curl -L --connect-timeout 10 -s "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/am_adam.pt" --output "$VOICE_PT_PATH"
     fi
     
     log_info "Converting Voice Model to Binary..."

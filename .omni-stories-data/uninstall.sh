@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Omni-Stories Uninstaller
-# Version: 1.0.1
+# Version: 1.1.0
 
 set -e
 
