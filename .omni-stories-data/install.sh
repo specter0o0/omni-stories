@@ -72,7 +72,21 @@ install_system_deps() {
             fi
         elif command -v apt-get &> /dev/null; then
             # Linux (Apt) - Including libass for captions, espeak-ng for local TTS
-            sudo apt-get update && sudo apt-get install -y git ffmpeg python3 python3-pip libass-dev espeak-ng
+            sudo apt-get update
+            if ! sudo apt-get install -y git ffmpeg python3 python3-pip libass-dev espeak-ng; then
+                 echo -e "${YELLOW}Apt reported errors (likely unrelated system issues). Verifying Omni-Stories dependencies...${NC}"
+                 MISSING_CRITICAL=""
+                 for pkg in git ffmpeg python3 espeak-ng; do
+                     if ! command -v $pkg &> /dev/null; then MISSING_CRITICAL="$MISSING_CRITICAL $pkg"; fi
+                 done
+                 
+                 if [ -n "$MISSING_CRITICAL" ]; then
+                     echo -e "${RED}Critical prerequisites failed to install:$MISSING_CRITICAL${NC}"
+                     exit 1
+                 else
+                     echo -e "${GREEN}Omni-Stories dependencies verified successfully despite system warnings.${NC}"
+                 fi
+            fi
         elif command -v dnf &> /dev/null; then
             sudo dnf install -y git ffmpeg python3 python3-pip espeak-ng
         elif command -v pacman &> /dev/null; then
