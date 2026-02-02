@@ -231,10 +231,52 @@ mkdir -p "$DATA_NAME/models/kokoro"
 mkdir -p "$DATA_NAME/background_videos"
 
 # Download Kokoro Model
+# Download Kokoro Model
 MODEL_PATH="$DATA_NAME/models/kokoro/model.onnx"
+VOCAB_PATH="$DATA_NAME/models/kokoro/tokenizer.json"
+VOICE_PT_PATH="$DATA_NAME/models/kokoro/am_adam.pt"
+VOICE_BIN_PATH="$DATA_NAME/models/kokoro/am_adam.bin"
+
+# Validation: Check if existing model is valid (>100MB)
+if [ -f "$MODEL_PATH" ]; then
+    fsize=$(stat -c%s "$MODEL_PATH" 2>/dev/null || stat -f%z "$MODEL_PATH" 2>/dev/null || echo 0)
+    if [ "$fsize" -lt 100000000 ]; then
+        log_warn "Corrupted model detected ($fsize bytes). Redownloading..."
+        rm -f "$MODEL_PATH"
+    fi
+fi
+
 if [ ! -s "$MODEL_PATH" ]; then
-    log_info "Downloading Kokoro TTS Model (80MB)..."
-    retry_cmd curl -L -# "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx" --output "$MODEL_PATH"
+    log_info "Downloading Kokoro TTS Model (330MB)..."
+    retry_cmd curl -L -# "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/kokoro-v0_19.onnx" --output "$MODEL_PATH"
+fi
+
+if [ ! -s "$VOCAB_PATH" ]; then
+     log_info "Downloading Tokenizer Config..."
+     retry_cmd curl -L -s "https://huggingface.co/hexgrad/kLegacy/resolve/main/v0.19/config.json" --output "$VOCAB_PATH"
+fi
+
+if [ ! -s "$VOICE_BIN_PATH" ]; then
+    if [ ! -s "$VOICE_PT_PATH" ]; then
+         log_info "Downloading Voice Model (am_adam)..."
+         retry_cmd curl -L -s "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/am_adam.pt" --output "$VOICE_PT_PATH"
+    fi
+    
+    log_info "Converting Voice Model to Binary..."
+    $PYTHON_CMD -c "
+import torch
+import numpy as np
+try:
+    data = torch.load('$VOICE_PT_PATH', map_location='cpu', weights_only=True)
+    # Extract weight tensor (handle both raw tensor and dict checkpoint formats)
+    tensor = data if isinstance(data, torch.Tensor) else data.get('weight', data)
+    if isinstance(tensor, torch.Tensor):
+        tensor = tensor.numpy()
+    tensor.astype(np.float32).tofile('$VOICE_BIN_PATH')
+    print('Conversion successful.')
+except Exception as e:
+    print(f'Conversion failed: {e}')
+" || log_warn "Voice conversion failed. TTS may fallback or fail."
 fi
 
 # Cache Whisper Model
