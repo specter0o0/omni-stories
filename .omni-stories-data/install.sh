@@ -89,7 +89,7 @@ done
 log_info "Step 1/6: Checking System Dependencies..."
 
 install_pkg_mgr() {
-    local sys_deps="git ffmpeg python3 espeak-ng"
+    local sys_deps="git ffmpeg python3 espeak-ng unzip"
     local install_cmd=""
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -311,10 +311,18 @@ chmod +x "$SHIM"
 # Shell Injection
 inject_path() {
     local rc="$1"
-    [ -f "$rc" ] && ! grep -q "$LOCAL_BIN" "$rc" && echo -e "\nexport PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$rc"
+    local line="export PATH=\"\$HOME/.local/bin:\$PATH\""
+    if [ -f "$rc" ]; then
+        if ! grep -Fq "$line" "$rc"; then
+            echo -e "\n# Omni-Stories Path\n$line" >> "$rc"
+            log_ok "Added to $rc"
+        fi
+    fi
 }
 inject_path "$HOME/.bashrc"
 inject_path "$HOME/.zshrc"
+inject_path "$HOME/.profile"
+inject_path "$HOME/.bash_profile"
 
 echo -e "\n${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo -e " ${BOLD}INSTALLATION COMPLETE${NC}"

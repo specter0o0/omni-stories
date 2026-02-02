@@ -1475,14 +1475,17 @@ def main() -> None:
         TerminalUI.notify(f"{TerminalUI.SYM_OK} API credentials updated.")
 
     elif args.uninstall:
-        if TerminalUI.input_prompt("Completely purge all application data? (y/N)").lower() == "y":
-            for folder in [Paths['data'], Paths['output']]:
-                shutil.rmtree(folder, ignore_errors=True)
+        uninstall_script = Paths['data'] / "uninstall.sh"
+        if uninstall_script.exists():
             try:
-                (Path.home() / ".local" / "bin" / "omni-stories").unlink()
-            except OSError:
-                pass
-            TerminalUI.notify("Application successfully uninstalled.", TerminalUI.GREEN)
+                # Use subprocess to run the bash script directly
+                subprocess.run(["bash", str(uninstall_script)], check=True)
+            except subprocess.CalledProcessError:
+                TerminalUI.notify("Uninstall script failed or was aborted.", TerminalUI.RED)
+            except Exception as e:
+                TerminalUI.notify(f"Error launching uninstaller: {e}", TerminalUI.RED)
+        else:
+            TerminalUI.notify("Uninstall script not found. Please remove data manually.", TerminalUI.RED)
 
 
 if __name__ == "__main__":
