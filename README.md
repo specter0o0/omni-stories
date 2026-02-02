@@ -6,6 +6,14 @@ All you have to do as a human is tell your AI agent to generate a story. No furt
 
 > **TIP:** Add a cron job to allow your AI agent to generate stories every morning for you! :)
 
+## overview
+
+1. You ask your agent to generate a story (or set a cron job).
+2. it browses reddit, and finds a propper story
+3. polishes the story, adds propper pancuations, and adds tags for emotions/sfx if the user has v3 enabeled.
+4. uses the command, it automatically bakes everything togeather, and it also includes modern synced captions with word-by-word highlight.
+5. once it's complete, it sends you the video if it can, if not, it sends you the path
+
 ## Features
 - **High quality Narration**: ElevenLabs tts integration (Free tier available).
 - **Local Fallback**: if you don't have an API key or hit the quota limit, it will automatically fallback to use a tiny yet powerful local TTS (Kokoro-TTS) to generate the audio.

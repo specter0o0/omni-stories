@@ -900,6 +900,28 @@ def resolve_system_font(name: str, size: int) -> ImageFont.FreeTypeFont:
             
     return ImageFont.load_default()
 
+def resolve_emoji_font(size: int) -> Optional[ImageFont.FreeTypeFont]:
+    """Locate a color emoji font on the system."""
+    emoji_fonts = ["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"]
+    for name in emoji_fonts:
+        try:
+            # Try direct load first
+            return ImageFont.truetype(name, size)
+        except Exception:
+            pass
+        
+        # Linux fontconfig fallback
+        if sys.platform.startswith("linux") and shutil.which("fc-match"):
+            try:
+                result = subprocess.run(["fc-match", "-f", "%{file}", name], capture_output=True, text=True)
+                if result.returncode == 0 and result.stdout.strip():
+                    font_file = result.stdout.strip()
+                    if os.path.exists(font_file):
+                        return ImageFont.truetype(font_file, size)
+            except Exception:
+                pass
+    return None
+
 
 class ThumbnailGenerator:
     """Orchestrates the creation of cinematic preview images for generated videos."""
@@ -978,6 +1000,23 @@ class ThumbnailGenerator:
                 spacing = int(fs * THUMBNAIL_CONFIG["line_spacing_multiplier"])
                 y_cursor = (hgt - (len(line_buffer) * spacing)) / 2
 
+                emo_font = resolve_emoji_font(fs)
+
+                def draw_complex_text(draw_obj, pos, text, main_font, emoji_font, color, use_embedded_color=True):
+                    x, y = pos
+                    for char in text:
+                        is_emoji = ord(char) > 0x2000
+                        active_font = emoji_font if (is_emoji and emoji_font) else main_font
+                        
+                        # Use embedded color only for the final foreground pass
+                        fill_color = color
+                        ec = use_embedded_color if (is_emoji and emoji_font) else False
+                        
+                        draw_obj.text((x, y), char, font=active_font, fill=fill_color, embedded_color=ec)
+                        
+                        bbox = draw_obj.textbbox((x, y), char, font=active_font)
+                        x += (bbox[2] - bbox[0])
+
                 if config.get("thumbnail_glow", True):
                     glow_color = parse_hex_color(darken_color(config.get("thumbnail_glow_color", "#FFFFFF"), darken_factor))
                     glow_strength = float(str(config.get("thumbnail_glow_strength", "75%")).replace("%", "")) / 100.0
@@ -994,22 +1033,26 @@ class ThumbnailGenerator:
                         
                         for ox in range(-2, 3):
                             for oy in range(-2, 3):
-                                g_draw.text((gx_cursor + ox, gy_cursor + oy), content, font=typeface, fill=(*glow_color, glow_alpha))
+                                draw_complex_text(g_draw, (gx_cursor + ox, gy_cursor + oy), content, typeface, emo_font, (*glow_color, glow_alpha), use_embedded_color=False)
                         gy_cursor += spacing
                         
                     glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(10))
                     layer.alpha_composite(glow_layer)
+
+
 
                 for content in line_buffer:
                     box = draw.textbbox((0, 0), content, font=typeface)
                     tw = box[2] - box[0]
                     x_cursor = (wid - tw) / 2
 
+                    emo_font = resolve_emoji_font(fs)
+
                     if config.get("thumbnail_font_shadow", True):
                         drift = max(2, fs // THUMBNAIL_CONFIG["shadow_offset_divisor"])
-                        draw.text((x_cursor + drift, y_cursor + drift), content, font=typeface, fill=sh_fill)
+                        draw_complex_text(draw, (x_cursor + drift, y_cursor + drift), content, typeface, emo_font, sh_fill, use_embedded_color=False)
 
-                    draw.text((x_cursor, y_cursor), content, font=typeface, fill=(*txt_color, 255))
+                    draw_complex_text(draw, (x_cursor, y_cursor), content, typeface, emo_font, (*txt_color, 255), use_embedded_color=True)
                     y_cursor += spacing
 
                 layer = layer.rotate(
