@@ -91,30 +91,48 @@ log_info "Step 1/6: Checking System Dependencies..."
 install_pkg_mgr() {
     local sys_deps="git ffmpeg python3 espeak-ng unzip"
     local install_cmd=""
+    
+    # Pre-check: What's actually missing?
+    local missing=""
+    for bin in git ffmpeg python3 espeak-ng unzip; do
+        has_cmd "$bin" || missing="$missing $bin"
+    done
+    
+    # If nothing missing, skip pkg manager entirely
+    if [ -z "$missing" ]; then
+        return 0
+    fi
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS
         has_cmd brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        install_cmd="brew install $sys_deps"
+        install_cmd="brew install $missing"
     elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
         # Windows
         log_warn "Windows support is experimental. Ensure Git, FFmpeg, and Python are in PATH."
         return 0
     elif has_cmd apt-get; then
         sudo apt-get update >/dev/null 2>&1
-        install_cmd="sudo apt-get install -y $sys_deps libass-dev"
+        install_cmd="sudo apt-get install -y $missing libass-dev"
     elif has_cmd dnf; then
-        install_cmd="sudo dnf install -y $sys_deps"
+        install_cmd="sudo dnf install -y $missing"
     elif has_cmd pacman; then
-        install_cmd="sudo pacman -S --noconfirm git ffmpeg python python-pip espeak-ng"
+        install_cmd="sudo pacman -S --noconfirm $missing"
     elif has_cmd zypper; then
-        install_cmd="sudo zypper install -y $sys_deps"
+        install_cmd="sudo zypper install -y $missing"
     fi
 
     if [ -n "$install_cmd" ]; then
         if ! eval "$install_cmd" >/dev/null 2>&1; then
-             log_warn "Package manager encountered errors (likely unrelated system conflict)."
-             log_warn "Switching to 'Verification Mode'..."
+             # Only warn if something is STILL missing after the attempt
+             local still_missing=""
+             for bin in $missing; do
+                 has_cmd "$bin" || still_missing="$still_missing $bin"
+             done
+             
+             if [ -n "$still_missing" ]; then
+                log_warn "Package manager encountered errors. Required items still missing: $still_missing"
+             fi
         fi
     fi
 }
@@ -285,8 +303,12 @@ $PYTHON_CMD -c "from transformers import pipeline; pipeline('automatic-speech-re
 
 # Download Background Video
 if [ -z "$(ls -A "$DATA_NAME/background_videos")" ]; then
-    log_info "Downloading Sample Background..."
-    $PYTHON_CMD "$DATA_NAME/main.py" --dl_video -u "https://www.youtube.com/watch?v=n_Dv4JH_G_E" -r "1080p" > /dev/null 2>&1 || true
+    log_info "Downloading Sample Background Footage (this may take a minute)..."
+    if ! $PYTHON_CMD "$DATA_NAME/main.py" --dl_video -u "https://www.youtube.com/watch?v=n_Dv4JH_G_E" -r "1080p"; then
+        log_warn "Background download failed. You can download one later with: omni-stories --dl_video"
+    else
+        log_ok "Background footage ready."
+    fi
 fi
 
 log_ok "Assets provisioned."
