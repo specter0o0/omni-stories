@@ -15,8 +15,8 @@ All you have to do as a human is tell your AI agent to generate a story. No furt
 ---
 
 To install, simply tell your agent:
-|
-> Hey, install and configure omni-stories skill by following the skill.md instructions to set it up propperly. Use clawhub skill to instal the md files first. Then follow the instructions, and make sure to install the dependencies. (make sure it's in your skills directory under then name omni-stories)
+
+> **Hey, install and configure omni-stories skill by following the skill.md instructions to set it up propperly. Use clawhub skill to instal the md files first. Then follow the instructions, and make sure to install the dependencies. (make sure it's in your skills directory under then name omni-stories)**
 
 ---
 

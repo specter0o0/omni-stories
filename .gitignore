@@ -20,6 +20,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+logs/
 
 # Omni-Stories Internal
 .env

@@ -1,11 +1,31 @@
-numpy
-soundfile
-transformers
-pyyaml
-python-dotenv
-torch
-Pillow
-requests
-yt-dlp
-onnxruntime
-phonemizer
+# ============================================================================
+# Omni-Stories Core Dependencies
+# Minimum version constraints ensure compatibility while allowing updates
+# ============================================================================
+
+# Numerical computing and audio processing
+numpy>=1.21.0,<2.0.0          # Array operations, audio data handling
+soundfile>=0.12.0             # WAV file I/O for Kokoro TTS output
+
+# Machine Learning & NLP
+transformers>=4.30.0,<5.0.0   # Whisper model for caption alignment
+torch>=2.0.0,<3.0.0           # PyTorch for model inference and voice conversion
+
+# Configuration & Environment
+pyyaml>=6.0                   # Config file parsing
+python-dotenv>=0.19.0         # Environment variable management
+
+# Image Processing
+Pillow>=9.0.0                 # Thumbnail generation, emoji rendering
+
+# Network & Downloads
+requests>=2.28.0              # Reddit API, model downloads
+yt-dlp>=2023.0.0              # Background video acquisition
+
+# TTS Engine
+onnxruntime>=1.14.0; python_version < '3.13'  # Kokoro TTS (limited support on Py3.13+)
+phonemizer>=3.2.0             # Text to phoneme conversion for TTS
+
+# Platform-specific dependencies
+# Windows speech synthesis fallback (optional)
+pywin32>=300; sys_platform == 'win32'
