@@ -904,11 +904,12 @@ def resolve_emoji_font(size: int) -> Optional[ImageFont.FreeTypeFont]:
     """Locate a color emoji font on the system."""
     emoji_fonts = ["Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji"]
     for name in emoji_fonts:
-        try:
-            # Try direct load first
-            return ImageFont.truetype(name, size)
-        except Exception:
-            pass
+        # Try requested size first, then common bitmap sizes (109)
+        for target_size in [size, 109, 128]:
+            try:
+                return ImageFont.truetype(name, target_size)
+            except Exception:
+                pass
         
         # Linux fontconfig fallback
         if sys.platform.startswith("linux") and shutil.which("fc-match"):
@@ -917,7 +918,11 @@ def resolve_emoji_font(size: int) -> Optional[ImageFont.FreeTypeFont]:
                 if result.returncode == 0 and result.stdout.strip():
                     font_file = result.stdout.strip()
                     if os.path.exists(font_file):
-                        return ImageFont.truetype(font_file, size)
+                        for target_size in [size, 109, 128]:
+                            try:
+                                return ImageFont.truetype(font_file, target_size)
+                            except Exception:
+                                pass
             except Exception:
                 pass
     return None
@@ -1004,18 +1009,43 @@ class ThumbnailGenerator:
 
                 def draw_complex_text(draw_obj, pos, text, main_font, emoji_font, color, use_embedded_color=True):
                     x, y = pos
+                    std_bbox = draw_obj.textbbox((0, 0), "Hg", font=main_font)
+                    line_h = std_bbox[3] - std_bbox[1]
+                    
                     for char in text:
                         is_emoji = ord(char) > 0x2000
                         active_font = emoji_font if (is_emoji and emoji_font) else main_font
                         
-                        # Use embedded color only for the final foreground pass
-                        fill_color = color
-                        ec = use_embedded_color if (is_emoji and emoji_font) else False
-                        
-                        draw_obj.text((x, y), char, font=active_font, fill=fill_color, embedded_color=ec)
-                        
-                        bbox = draw_obj.textbbox((x, y), char, font=active_font)
-                        x += (bbox[2] - bbox[0])
+                        if is_emoji and emoji_font:
+                            # Render emoji to separate layer and scale for bitmap support
+                            emo_size = emoji_font.size
+                            char_bbox = draw_obj.textbbox((0, 0), char, font=active_font)
+                            char_w = char_bbox[2] - char_bbox[0]
+                            char_h = char_bbox[3] - char_bbox[1]
+                            
+                            # Create a patch at native font size
+                            patch = Image.new('RGBA', (max(1, char_w), max(1, char_h)), (0, 0, 0, 0))
+                            p_draw = ImageDraw.Draw(patch)
+                            p_draw.text((0, 0), char, font=active_font, fill=color, embedded_color=use_embedded_color)
+                            
+                            # Scale to match line height
+                            scale = line_h / char_h
+                            new_size = (int(char_w * scale), int(line_h))
+                            patch = patch.resize(new_size, Image.Resampling.LANCZOS)
+                            
+                            # Composite onto canvas
+                            offset_y = (line_h - new_size[1]) // 2
+                            canvas.paste(patch, (int(x), int(y + offset_y)), patch)
+                            x += new_size[0]
+                        else:
+                            char_bbox = draw_obj.textbbox((0, 0), char, font=active_font)
+                            char_h = char_bbox[3] - char_bbox[1]
+                            offset_y = (line_h - char_h) // 2
+                            
+                            draw_obj.text((x, y + offset_y), char, font=active_font, fill=color)
+                            
+                            bbox = draw_obj.textbbox((x, y), char, font=active_font)
+                            x += (bbox[2] - bbox[0])
 
                 if config.get("thumbnail_glow", True):
                     glow_color = parse_hex_color(darken_color(config.get("thumbnail_glow_color", "#FFFFFF"), darken_factor))
