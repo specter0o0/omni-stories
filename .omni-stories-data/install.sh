@@ -304,7 +304,7 @@ $PYTHON_CMD -c "from transformers import pipeline; pipeline('automatic-speech-re
 # Download Background Video
 if [ -z "$(ls -A "$DATA_NAME/background_videos")" ]; then
     log_info "Downloading Sample Background Footage (this may take a minute)..."
-    if ! $PYTHON_CMD "$DATA_NAME/main.py" --dl_video -u "https://www.youtube.com/watch?v=n_Dv4JH_G_E" -r "1080p"; then
+    if ! $PYTHON_CMD "$DATA_NAME/main.py" --dl_video -u "https://www.youtube.com/watch?v=GVgLf8ENBJo" -r "1080p"; then
         log_warn "Background download failed. You can download one later with: omni-stories --dl_video"
     else
         log_ok "Background footage ready."

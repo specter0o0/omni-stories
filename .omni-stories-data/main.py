@@ -1333,7 +1333,7 @@ def run_health_check() -> None:
     if not bgs:
         TerminalUI.notify(f"{TerminalUI.SYM_WARN} No background footage available.", TerminalUI.YELLOW)
         if TerminalUI.input_prompt("Download sample background? (y/N)").lower() == "y":
-            sample_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            sample_url = "https://www.youtube.com/watch?v=GVgLf8ENBJo"
             TerminalUI.notify(f"Recommended tool: omni-stories --dl_video -u {sample_url}", TerminalUI.WHITE)
 
     db = load_database()

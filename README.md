@@ -20,7 +20,9 @@ All you have to do as a human is tell your AI agent to generate a story. No furt
 
 ### 🧑 For Humans 
 **The Easy Way:** Simply paste this prompt to your AI agent:
-`Install and configure this skill by following the instructions at https://raw.githubusercontent.com/specter0o0/omni-stories/main/SKILL.md`
+```
+Hey, install and configure omni-stories skill by following the skill.md instructions to set it up propperly. Use clawhub skill to instal the md files first. Then follow the instructions, and make sure to install the dependencies. (make sure it's in your skills directory under then name omni-stories) https://raw.githubusercontent.com/specter0o0/omni-stories/main/SKILL.md
+```
 
 **The Manual Way (very quick):**
 run directly via curl:
