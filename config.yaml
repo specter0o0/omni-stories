@@ -36,7 +36,7 @@ caption_glow_darken_factor: 0.75 # 1.0 = same as highlight, 0.0 = black
 
 
 # Voice & TTS Preferences (ElevenLabs)
-voice_id: pNInz6obpgmqnzhlAYqc # Adam (default)
+voice_id: pNInz6obpgDQGcFmaJgB # Adam (default)
 voice_model: v2 # v2 / v3
 # NOTE: v3 requires a paid elevenlabs subscription, but it is recommended. You can add emotions and even sfx like [laughter] or [gun_shot]
 

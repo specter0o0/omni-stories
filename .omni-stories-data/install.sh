@@ -61,7 +61,7 @@ install_system_deps() {
         if [[ "$OSTYPE" == "darwin"* ]]; then
             # macOS
             command -v brew &> /dev/null || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            brew install git ffmpeg python3
+            brew install git ffmpeg python3 espeak-ng
         elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
             # Windows
             if command -v winget &> /dev/null; then
@@ -71,14 +71,14 @@ install_system_deps() {
                 exit 1
             fi
         elif command -v apt-get &> /dev/null; then
-            # Linux (Apt) - Including libass for perfect captions
-            sudo apt-get update && sudo apt-get install -y git ffmpeg python3 python3-pip libass-dev
+            # Linux (Apt) - Including libass for captions, espeak-ng for local TTS
+            sudo apt-get update && sudo apt-get install -y git ffmpeg python3 python3-pip libass-dev espeak-ng
         elif command -v dnf &> /dev/null; then
-            sudo dnf install -y git ffmpeg python3 python3-pip
+            sudo dnf install -y git ffmpeg python3 python3-pip espeak-ng
         elif command -v pacman &> /dev/null; then
-            sudo pacman -S --noconfirm git ffmpeg python python-pip
+            sudo pacman -S --noconfirm git ffmpeg python python-pip espeak-ng
         elif command -v zypper &> /dev/null; then
-            sudo zypper install -y git ffmpeg python3 python3-pip
+            sudo zypper install -y git ffmpeg python3 python3-pip espeak-ng
         fi
     fi
 }

@@ -163,7 +163,7 @@ APP_DEFAULTS = {
     "caption_glow_darken_factor": 0.7,
 
     "voice_model": "v2",
-    "voice_id": "pNInz6obpgmqnzhlAYqc",
+    "voice_id": "pNInz6obpgDQGcFmaJgB",
     "kokoro_voice": "am_adam",
     "max_db_entries": 500,
     "system_paths": DEFAULT_SYSTEM_PATHS
@@ -171,10 +171,11 @@ APP_DEFAULTS = {
 
 CAPTION_COST_WEIGHTS = {
     "overflow_penalty": 200,
-    "period_bonus": 100,
+    "period_bonus": 150,
     "comma_bonus": 50,
     "length_deviation": 30,
-    "capitalization_penalty": 40
+    "capitalization_penalty": 40,
+    "gap_penalty": 1000
 }
 
 THUMBNAIL_CONFIG = {
@@ -380,50 +381,7 @@ def generate_local_audio(text: str, output_path: str) -> str:
         sys.exit(1)
 
 
-def verify_python_environment() -> List[str]:
-    """
-    Search for missing mandatory Python dependencies.
-    
-    Returns:
-        List of missing package names.
-    """
-    req_file = ENGINE_DIR / "requirements.txt"
-    if not req_file.exists():
-        return []
-        
-    with open(req_file, 'r') as f:
-        required = [line.split('==')[0].strip() for line in f if line.strip() and not line.startswith('#')]
 
-    missing = []
-    for package in required:
-        try:
-            __import__(package)
-        except ImportError:
-            missing.append(package)
-    return missing
-
-
-def run_setup_routine() -> None:
-    """
-    Execute initial setup steps, including dependency checks and directory creation.
-    """
-    TerminalUI.notify("Running setup routine...", TerminalUI.CYAN)
-    
-    # Create necessary directories
-    for path_key in ['output', 'temp', 'database', 'kokoro']:
-        path = Paths[path_key]
-        if not path.exists():
-            path.mkdir(parents=True, exist_ok=True)
-            TerminalUI.notify(f"Created directory: {path}", TerminalUI.BLUE)
-
-    # Check for missing Python dependencies
-    missing_deps = verify_python_environment()
-    if missing_deps:
-        TerminalUI.notify(f"{TerminalUI.SYM_WARN} Missing Python dependencies: {', '.join(missing_deps)}", TerminalUI.YELLOW)
-        TerminalUI.notify("Please install them using: pip install -r engine/requirements.txt", TerminalUI.YELLOW)
-        # sys.exit(1) # Decide if this should be a hard exit or just a warning
-
-    TerminalUI.notify(f"{TerminalUI.SYM_OK} Setup routine complete.", TerminalUI.GREEN)
 
 
 def load_database() -> Dict[str, Any]:
@@ -752,6 +710,14 @@ def generate_ass_subtitles(word_chunks: List[Dict], output_path: str, aspect_rat
             
             if j < len(merged_chunks):
                 nxt = merged_chunks[j]['text']
+                
+                # Penalize bridging long gaps (pauses)
+                if j > idx:
+                    prev_end = merged_chunks[j-1]['timestamp'][1]
+                    curr_start = merged_chunks[j]['timestamp'][0]
+                    if (curr_start - prev_end) > 0.6:
+                        cost += CAPTION_COST_WEIGHTS["gap_penalty"]
+
                 if last_tok[0].isupper() and nxt[0].isupper():
                     cost += CAPTION_COST_WEIGHTS["capitalization_penalty"]
 
@@ -845,7 +811,7 @@ def generate_vocal_audio(text_content: str, destination_name: str) -> str:
     """
     api_key_pool = os.getenv("ELEVENLABS_API_KEYS", "").split(",")
     config = get_config()
-    voice_id = config.get("voice_id", "pNInz6obpgmqnzhlAYqc")
+    voice_id = config.get("voice_id", "pNInz6obpgDQGcFmaJgB")
     
     model_id = "eleven_multilingual_v2"
     if config.get("voice_model") == "v3":
@@ -939,7 +905,7 @@ class ThumbnailGenerator:
     """Orchestrates the creation of cinematic preview images for generated videos."""
     
     @staticmethod
-    def create(video_src: str, text_overlay: str, output_dst: str) -> None:
+    def create(video_src: str, text_overlay: str, output_dst: str, seek_time: float = 0.0) -> None:
         """
         Produce a blurred-background thumbnail with stylized text overlay.
         
@@ -947,6 +913,7 @@ class ThumbnailGenerator:
             video_src: Path to the source MP4 file.
             text_overlay: The title or quote to display on the image.
             output_dst: Target filesystem path for the resulting PNG.
+            seek_time: Time offset in seconds to capture the frame from.
         """
         if Image is None:
             TerminalUI.notify("Pillow not found, thumbnail generation skipped.", TerminalUI.YELLOW)
@@ -959,10 +926,14 @@ class ThumbnailGenerator:
         try:
             video_meta = get_probe_data(video_src)
             total_dur = float(video_meta.get('format', {}).get('duration', 5))
-            capture_point = random.uniform(
-                total_dur * VIDEO_CAPTURE_RANGE[0],
-                total_dur * VIDEO_CAPTURE_RANGE[1]
-            )
+            
+            # Use provided seek_time, but ensure it's valid
+            capture_point = seek_time
+            if capture_point <= 0 or capture_point >= total_dur:
+                 capture_point = random.uniform(
+                    total_dur * VIDEO_CAPTURE_RANGE[0],
+                    total_dur * VIDEO_CAPTURE_RANGE[1]
+                )
             
             subprocess.run(
                 ["ffmpeg", "-y", "-ss", str(capture_point), "-i", video_src, "-frames:v", "1", working_frame],
@@ -1085,7 +1056,7 @@ def find_system_ffmpeg() -> str:
             
     return unique_paths[0] if unique_paths else "ffmpeg"
 
-def compose_final_video(bg_src: str, audio_src: str, subtitle_src: str, output_dst: str, aspect_ratio: str = "16:9") -> None:
+def compose_final_video(bg_src: str, audio_src: str, subtitle_src: str, output_dst: str, aspect_ratio: str = "16:9", start_offset: float = 0.0) -> None:
     """
     Orchestrate video and audio stream merger via FFmpeg filters.
     
@@ -1095,6 +1066,7 @@ def compose_final_video(bg_src: str, audio_src: str, subtitle_src: str, output_d
         subtitle_src: Path to the generated ASS file.
         output_dst: Final target path for the production video.
         aspect_ratio: Target display format (e.g., '9:16').
+        start_offset: Time in seconds to start reading the background video.
     """
     TerminalUI.notify("Composing final video...", TerminalUI.CYAN)
     config = get_config()
@@ -1106,9 +1078,10 @@ def compose_final_video(bg_src: str, audio_src: str, subtitle_src: str, output_d
     video_meta = get_probe_data(bg_src)
     video_dur = float(video_meta.get('format', {}).get('duration', 0))
 
-    start_offset = 0
-    if video_dur > audio_dur + 2:
-        start_offset = random.uniform(0, video_dur - audio_dur - 2)
+    audio_dur = float(audio_meta.get('format', {}).get('duration', 0))
+    
+    # Use pre-calculated offset
+    pass
 
     qualities = {"1080p": 1.0, "2048p": 2048 / 1920, "4096p": 4096 / 1920}
     scale_factor = qualities.get(config.get("quality", "1080p"), 1.0)
@@ -1183,10 +1156,20 @@ def execute_generation_pipeline(url: str, title: str, content: str, aspect_ratio
     ass_path = Paths['tts_generations'] / f"{safe_slug}.ass"
     generate_ass_subtitles(aligned_words, str(ass_path), aspect_ratio)
     
+    video_meta = get_probe_data(chosen_bg)
+    video_dur = float(video_meta.get('format', {}).get('duration', 0))
+    audio_meta = get_probe_data(audio_path)
+    audio_dur = float(audio_meta.get('format', {}).get('duration', 0))
+
+    start_offset = 0.0
+    if video_dur > audio_dur + 2:
+        start_offset = random.uniform(0, video_dur - audio_dur - 2)
+
     video_path = str(destination_dir / f"{safe_slug}.mp4")
-    compose_final_video(chosen_bg, audio_path, str(ass_path), video_path, aspect_ratio)
+    compose_final_video(chosen_bg, audio_path, str(ass_path), video_path, aspect_ratio, start_offset)
     
-    ThumbnailGenerator.create(video_path, quote or title, str(destination_dir / "thumbnail.png"))
+    # Use raw background and exact offset for clean thumbnail
+    ThumbnailGenerator.create(chosen_bg, quote or title, str(destination_dir / "thumbnail.png"), start_offset + 1.0)
     
     with open(destination_dir / "metadata.md", 'w') as f:
         f.write(f"Title: {title}\n")
@@ -1280,7 +1263,7 @@ def run_setup_routine(api_key: Optional[str] = None) -> None:
         if executable_link.exists() or executable_link.is_symlink():
             executable_link.unlink()
 
-        wrapper = f'#!/bin/bash\nexec "{sys.executable}" "{BASE_DIR}/main.py" "$@"\n'
+        wrapper = f'#!/bin/bash\nexec "{sys.executable}" "{ENGINE_DIR}/main.py" "$@"\n'
         with open(executable_link, "w") as f:
             f.write(wrapper)
         executable_link.chmod(0o755)

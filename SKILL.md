@@ -14,7 +14,7 @@ All you have to do as a human is tell your AI agent to generate a story. No furt
 
 > **TIP:** Add a cron job to allow your AI agent to generate stories every morning for you! :)
 
-> Read the [README.md](./README.md) for more information (including setup instructions). This `SKILL.md` assumes you have everything set up; if not, please read the README!
+> Read the [README.md]({baseDir}/README.md) for more information (including setup instructions). This `SKILL.md` assumes you have everything set up; if not, please read the README!
 
 ## Automated Usage
 
