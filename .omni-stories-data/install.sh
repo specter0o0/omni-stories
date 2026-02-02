@@ -2,8 +2,13 @@
 
 # Omni-Stories v1.0.0 Setup Wizard
 # Universal, Zero-Failure, Fully Automated.
+# "It just works."
 
 set -e
+
+# ==============================================================================
+# 0. Utilities & Constants
+# ==============================================================================
 
 # Terminal Colors
 CYAN='\033[0;36m'
@@ -14,6 +19,11 @@ MAGENTA='\033[0;35m'
 WHITE='\033[1;37m'
 NC='\033[0m'
 BOLD='\033[1m'
+
+ROOT_NAME="omni-stories"
+DATA_NAME=".omni-stories-data"
+REPO_URL="https://github.com/specter0o0/omni-stories"
+LOCAL_BIN="$HOME/.local/bin"
 
 BANNER="
 ${CYAN}╔═══════════════════════════════════════════════════════════╗
@@ -32,11 +42,39 @@ ${CYAN}╔═══════════════════════�
 ╚═══════════════════════════════════════════════════════════╝${NC}
 "
 
+log_info() { echo -e "${CYAN}[I] $1${NC}"; }
+log_ok()   { echo -e "${GREEN}[✔] $1${NC}"; }
+log_warn() { echo -e "${YELLOW}[!] $1${NC}"; }
+log_err()  { echo -e "${RED}[✖] $1${NC}"; }
+
+# Retry mechanism for network operations (3 attempts)
+retry_cmd() {
+    local -i retries=3
+    local -i count=0
+    until "$@"; do
+        exit_code=$?
+        count=$((count + 1))
+        if [ $count -lt $retries ]; then
+            log_warn "Command failed (Attempt $count/$retries). Retrying..."
+            sleep 2
+        else
+            log_err "Command failed after $retries attempts."
+            return $exit_code
+        fi
+    done
+    return 0
+}
+
+# Check if a specific binary exists in PATH
+has_cmd() {
+    command -v "$1" &> /dev/null
+}
+
 clear
 echo -e "$BANNER"
-echo -e "${CYAN}${BOLD}Omni-Stories v1.0.0 Setup Wizard${NC}\n"
+log_info "Initializing Omni-Stories Installer..."
 
-# 1. Platform Detection
+# Parse Flags
 SILENT=false
 API_KEYS=""
 for arg in "$@"; do
@@ -44,136 +82,182 @@ for arg in "$@"; do
     if [[ "$arg" != "-"* && -n "$arg" ]]; then API_KEYS="$arg"; fi
 done
 
-ROOT_NAME="omni-stories"
-DATA_NAME=".omni-stories-data"
-LOCAL_BIN="$HOME/.local/bin"
-REPO_URL="https://github.com/specter0o0/omni-stories"
+# ==============================================================================
+# 1. System Dependency Resolution
+# ==============================================================================
 
-install_system_deps() {
-    MISSING=""
-    for pkg in git ffmpeg python3; do
-        if ! command -v $pkg &> /dev/null; then MISSING="$MISSING $pkg"; fi
-    done
+log_info "Step 1/6: Checking System Dependencies..."
 
-    if [ -n "$MISSING" ] || [ -n "$(command -v apt-get)" ]; then
-        echo -e "${CYAN}Finalizing system dependencies...${NC}"
+install_pkg_mgr() {
+    local sys_deps="git ffmpeg python3 espeak-ng"
+    local install_cmd=""
 
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS
-            command -v brew &> /dev/null || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            brew install git ffmpeg python3 espeak-ng
-        elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-            # Windows
-            if command -v winget &> /dev/null; then
-                winget install --id=Git.Git -e --silent && winget install --id=Gyan.FFmpeg -e --silent && winget install --id=Python.Python.3.12 -e --silent
-            else
-                echo -e "${RED}Winget missing. Please install Git, FFmpeg, and Python 3 manually.${NC}"
-                exit 1
-            fi
-        elif command -v apt-get &> /dev/null; then
-            # Linux (Apt) - Including libass for captions, espeak-ng for local TTS
-            sudo apt-get update
-            if ! sudo apt-get install -y git ffmpeg python3 python3-pip libass-dev espeak-ng; then
-                 echo -e "${YELLOW}Apt reported errors (likely unrelated system issues). Verifying Omni-Stories dependencies...${NC}"
-                 MISSING_CRITICAL=""
-                 for pkg in git ffmpeg python3 espeak-ng; do
-                     if ! command -v $pkg &> /dev/null; then MISSING_CRITICAL="$MISSING_CRITICAL $pkg"; fi
-                 done
-                 
-                 if [ -n "$MISSING_CRITICAL" ]; then
-                     echo -e "${RED}Critical prerequisites failed to install:$MISSING_CRITICAL${NC}"
-                     exit 1
-                 else
-                     echo -e "${GREEN}Omni-Stories dependencies verified successfully despite system warnings.${NC}"
-                 fi
-            fi
-        elif command -v dnf &> /dev/null; then
-            sudo dnf install -y git ffmpeg python3 python3-pip espeak-ng
-        elif command -v pacman &> /dev/null; then
-            sudo pacman -S --noconfirm git ffmpeg python python-pip espeak-ng
-        elif command -v zypper &> /dev/null; then
-            sudo zypper install -y git ffmpeg python3 python3-pip espeak-ng
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        has_cmd brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        install_cmd="brew install $sys_deps"
+    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
+        # Windows
+        log_warn "Windows support is experimental. Ensure Git, FFmpeg, and Python are in PATH."
+        return 0
+    elif has_cmd apt-get; then
+        sudo apt-get update >/dev/null 2>&1
+        install_cmd="sudo apt-get install -y $sys_deps libass-dev"
+    elif has_cmd dnf; then
+        install_cmd="sudo dnf install -y $sys_deps"
+    elif has_cmd pacman; then
+        install_cmd="sudo pacman -S --noconfirm git ffmpeg python python-pip espeak-ng"
+    elif has_cmd zypper; then
+        install_cmd="sudo zypper install -y $sys_deps"
+    fi
+
+    if [ -n "$install_cmd" ]; then
+        if ! eval "$install_cmd" >/dev/null 2>&1; then
+             log_warn "Package manager encountered errors (likely unrelated system conflict)."
+             log_warn "Switching to 'Verification Mode'..."
         fi
     fi
 }
-install_system_deps
 
-# 2. Workspace Setup
-if [ -d "$DATA_NAME" ] && [ -f "$DATA_NAME/main.py" ]; then
-    ABSOLUTE_ROOT="$(pwd)"
-elif [ -d "$ROOT_NAME/$DATA_NAME" ]; then
-    cd "$ROOT_NAME"
-    ABSOLUTE_ROOT="$(pwd)"
-else
-    echo -e "${CYAN}Deploying Omni-Stories...${NC}"
-    if command -v git &> /dev/null; then
-        git clone "$REPO_URL.git" "$ROOT_NAME" || { echo -e "${RED}Clone failed.${NC}"; exit 1; }
-    else
-        mkdir -p "$ROOT_NAME"
-        curl -L "$REPO_URL/archive/refs/heads/main.zip" -o "os.zip"
-        unzip -q "os.zip" -d "os-tmp"
-        mv "os-tmp/omni-stories-main/"* "$ROOT_NAME/"
-        rm -rf "os-tmp" "os.zip"
-    fi
-    cd "$ROOT_NAME"
-    ABSOLUTE_ROOT="$(pwd)"
-fi
+# Run install attempt
+install_pkg_mgr
 
-# 3. Python Optimization
-PYTHON_CMD="python3"
-for cmd in python3.12 python3.11 python3 python; do
-    if command -v $cmd &> /dev/null; then
-        if $cmd -c "import sys; exit(0) if sys.version_info >= (3, 9) else exit(1)" 2>/dev/null; then
-            PYTHON_CMD="$cmd"
-            break
-        fi
+# STRICT VERIFICATION: If binary checks fail after install attempt, then we actually fail
+MISSING_CRITICAL=""
+for bin in git ffmpeg python3 espeak-ng; do
+    if ! has_cmd "$bin"; then 
+        MISSING_CRITICAL="$MISSING_CRITICAL $bin"
     fi
 done
 
-pip_install() {
-    if $PYTHON_CMD -m pip help install | grep -q 'break-system-packages'; then
-        $PYTHON_CMD -m pip install --user --break-system-packages "$@"
+if [ -n "$MISSING_CRITICAL" ]; then
+    log_err "Critical Failure: The following dependencies are missing and could not be installed:"
+    log_err "   -> $MISSING_CRITICAL"
+    log_err "Please install them manually."
+    exit 1
+fi
+log_ok "System dependencies verified."
+
+# ==============================================================================
+# 2. Workspace Provisioning
+# ==============================================================================
+
+log_info "Step 2/6: Setting up Workspace..."
+
+if [ -d "$DATA_NAME" ] && [ -f "$DATA_NAME/main.py" ]; then
+    # Already inside repo
+    ABSOLUTE_ROOT="$(pwd)"
+    log_ok "Using existing directory."
+else
+    # Need to deploy
+    if [ -d "$ROOT_NAME" ]; then
+        log_warn "Directory '$ROOT_NAME' exists. Updating..."
+        cd "$ROOT_NAME"
+        if [ -d ".git" ]; then
+            git pull >/dev/null 2>&1 || true
+        fi
     else
-        $PYTHON_CMD -m pip install --user "$@"
+        log_info "Downloading Omni-Stories..."
+        if has_cmd git; then
+            git clone "$REPO_URL.git" "$ROOT_NAME" -q || { log_err "Git clone failed."; exit 1; }
+            cd "$ROOT_NAME"
+        else
+            mkdir -p "$ROOT_NAME"
+            curl -L -s "$REPO_URL/archive/refs/heads/main.zip" -o "os.zip"
+            unzip -q "os.zip" -d "os-tmp"
+            mv "os-tmp/omni-stories-main/"* "$ROOT_NAME/"
+            rm -rf "os-tmp" "os.zip"
+            cd "$ROOT_NAME"
+        fi
     fi
-}
-
-echo -e "${CYAN}Installing Python requirements...${NC}"
-pip_install --upgrade pip > /dev/null 2>&1 || true
-pip_install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio || true
-pip_install -r "$DATA_NAME/requirements.txt" || { echo -e "${RED}Dependency failure.${NC}"; exit 1; }
-
-# 4. Interactive Configuration
-if [ "$SILENT" = false ]; then
-    if [ -z "$API_KEYS" ]; then
-        echo -en "${WHITE}${BOLD}ElevenLabs API Key(s) [Comma-separated, optional]: ${NC}"
-        # Ensure 'read' works when piped
-        read -r API_KEYS < /dev/tty || true
-    fi
+    ABSOLUTE_ROOT="$(pwd)"
 fi
+
+# ==============================================================================
+# 3. Python Environment Optimization
+# ==============================================================================
+
+log_info "Step 3/6: configuring Python Runtime..."
+
+# Find best Python version (prefer 3.12 > 3.11 > 3.10 > 3.9)
+PYTHON_CMD=""
+for ver in 3.12 3.11 3.10 3.9 3; do
+    if has_cmd "python$ver"; then
+        PYTHON_CMD="python$ver"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    log_err "No suitable Python 3 version found."
+    exit 1
+fi
+
+log_ok "Using Python: $PYTHON_CMD ($($PYTHON_CMD --version))"
+
+# Smart PIP Install
+pip_install_args="--user"
+if $PYTHON_CMD -m pip help install | grep -q 'break-system-packages'; then
+    pip_install_args="--user --break-system-packages"
+fi
+
+log_info "Installing Dependencies (this may take a moment)..."
+retry_cmd $PYTHON_CMD -m pip install --upgrade pip $pip_install_args >/dev/null 2>&1
+retry_cmd $PYTHON_CMD -m pip install -r "$DATA_NAME/requirements.txt" $pip_install_args >/dev/null 2>&1
+
+log_ok "Python environment ready."
+
+# ==============================================================================
+# 4. Configuration
+# ==============================================================================
+
+log_info "Step 4/6: Configuring Credentials..."
+
+if [ "$SILENT" = false ] && [ -z "$API_KEYS" ]; then
+    echo -en "${YELLOW}Enter ElevenLabs API Key(s) (Optional, comma-separated): ${NC}"
+    read -r API_KEYS < /dev/tty || true
+fi
+
 echo "ELEVENLABS_API_KEYS='$API_KEYS'" > .env
+log_ok "Configuration saved."
 
-# 5. Asset & Model Provisioning (Silent)
+# ==============================================================================
+# 5. Asset Provisioning (Self-Healing)
+# ==============================================================================
+
+log_info "Step 5/6: Provisioning Assets..."
+
 mkdir -p "$DATA_NAME/models/kokoro"
+mkdir -p "$DATA_NAME/background_videos"
+
+# Download Kokoro Model
 MODEL_PATH="$DATA_NAME/models/kokoro/model.onnx"
-if [ ! -f "$MODEL_PATH" ]; then
-    echo -e "${CYAN}Downloading Kokoro-TTS models...${NC}"
-    curl -L -# "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx" --output "$MODEL_PATH"
+if [ ! -s "$MODEL_PATH" ]; then
+    log_info "Downloading Kokoro TTS Model (80MB)..."
+    retry_cmd curl -L -# "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.onnx" --output "$MODEL_PATH"
 fi
 
-echo -e "${CYAN}Caching AI models...${NC}"
+# Cache Whisper Model
+log_info "Caching Whisper Model..."
 $PYTHON_CMD -c "from transformers import pipeline; pipeline('automatic-speech-recognition', model='openai/whisper-base.en')" > /dev/null 2>&1 || true
 
-# Conditional background footage download
-mkdir -p "$DATA_NAME/background_videos"
+# Download Background Video
 if [ -z "$(ls -A "$DATA_NAME/background_videos")" ]; then
-    echo -e "${CYAN}Downloading default background clips...${NC}"
+    log_info "Downloading Sample Background..."
     $PYTHON_CMD "$DATA_NAME/main.py" --dl_video -u "https://www.youtube.com/watch?v=n_Dv4JH_G_E" -r "1080p" > /dev/null 2>&1 || true
 fi
 
-# 6. Command Delivery
+log_ok "Assets provisioned."
+
+# ==============================================================================
+# 6. Global Command Setup
+# ==============================================================================
+
+log_info "Step 6/6: Finalizing..."
+
 mkdir -p "$LOCAL_BIN"
 SHIM="$LOCAL_BIN/omni-stories"
+
 cat <<EOF > "$SHIM"
 #!/usr/bin/env bash
 PROJECT_DIR="$ABSOLUTE_ROOT"
@@ -182,25 +266,21 @@ exec "$PYTHON_CMD" "\$PROJECT_DIR/$DATA_NAME/main.py" "\$@"
 EOF
 chmod +x "$SHIM"
 
+# Shell Injection
 inject_path() {
-    local shell_rc="$1"
-    if [ -f "$shell_rc" ]; then
-        if ! grep -q "$LOCAL_BIN" "$shell_rc"; then
-            echo -e "\n# Omni-Stories Bin\nexport PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_rc"
-        fi
-    fi
+    local rc="$1"
+    [ -f "$rc" ] && ! grep -q "$LOCAL_BIN" "$rc" && echo -e "\nexport PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$rc"
 }
 inject_path "$HOME/.bashrc"
 inject_path "$HOME/.zshrc"
-[[ "$OSTYPE" == "darwin"* || "$OSTYPE" == "msys" ]] && inject_path "$HOME/.profile"
 
-export PATH="$LOCAL_BIN:$PATH"
-
-# 7. Handover
-echo -e "\n${GREEN}${BOLD}Setup Complete. v1.0.0 is ready for use.${NC}"
-echo -e "${WHITE}Command: ${CYAN}omni-stories${NC}"
-echo -e "Diagnostic: omni-stories --doctor"
-
+echo -e "\n${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e " ${BOLD}INSTALLATION COMPLETE${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e " You can now run: ${CYAN}omni-stories${NC}"
+echo -e " To check status: ${CYAN}omni-stories --doctor${NC}"
+echo ""
 if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
-    echo -e "\n${YELLOW}Note: Restart your terminal or run: source $([ -f "$HOME/.zshrc" ] && echo "~/.zshrc" || echo "~/.bashrc")${NC}"
+    echo -e "${YELLOW}NOTE: You may need to restart your terminal.${NC}"
 fi
+exit 0
