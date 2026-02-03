@@ -270,13 +270,17 @@ log_info "Step 3/7: Installing System Dependencies..."
 run_as_root() {
     if [ "$EUID" -eq 0 ]; then
         "$@"
-    elif [ -r /dev/tty ]; then
-        # Piped but TTY available: force TTY for sudo (interactive)
-        sudo "$@" < /dev/tty
+    elif has_cmd sudo; then
+        if [ -r /dev/tty ]; then
+            # Piped but TTY available: force TTY for sudo (interactive)
+            sudo "$@" < /dev/tty
+        else
+            # Piped and no TTY: non-interactive sudo to prevent pipe consumption
+            sudo -n "$@" < /dev/null
+        fi
     else
-        # Piped and no TTY: non-interactive sudo to prevent pipe consumption
-        # This will fail if password is required, which is correct for CI
-        sudo -n "$@" < /dev/null
+        # No sudo and not root - attempt direct execution as fallback
+        "$@"
     fi
 }
 
@@ -302,6 +306,7 @@ install_system_deps() {
     [ -z "$missing" ] && return 0
     
     log_info "Missing dependencies:$missing"
+    log_info "Attempting to install system dependencies..."
     
     if [ "$IS_MACOS" = true ]; then
         if ! has_cmd brew; then
@@ -315,7 +320,6 @@ install_system_deps() {
         log_info "Windows detected. Attempting package manager installation..."
         if has_cmd winget; then
             log_info "Using winget..."
-            # Winget calls need checking, simplistic approach here:
             for pkg in "Python.Python.3.12" "Gyan.FFmpeg" "Git.Git" "eSpeak-NG.eSpeak-NG"; do
                  winget install --silent --accept-package-agreements --accept-source-agreements "$pkg" 2>/dev/null || true
             done
@@ -324,20 +328,21 @@ install_system_deps() {
                  choco install -y "$pkg" 2>/dev/null || true
              done
         else
-            log_warn "No Windows package manager found. Install manually:"
-            log_warn "  Python, FFmpeg, Git, eSpeak-NG"
+            log_warn "No Windows package manager found. Install manually: Python, FFmpeg, Git, eSpeak-NG"
         fi
     elif has_cmd apt-get; then
-        run_as_root apt-get update -qq &>/dev/null
-        run_as_root apt-get install -y $missing libass-dev 2>/dev/null || true
+        log_info "Updating package lists..."
+        run_as_root apt-get update -qq || log_warn "Apt update failed, attempting install anyway..."
+        log_info "Installing missing packages..."
+        run_as_root apt-get install -y $missing libass-dev || log_warn "Apt install reported errors"
     elif has_cmd dnf; then
-        run_as_root dnf install -y $missing 2>/dev/null || true
+        run_as_root dnf install -y $missing || log_warn "Dnf install reported errors"
     elif has_cmd pacman; then
-        run_as_root pacman -S --noconfirm $missing 2>/dev/null || true
+        run_as_root pacman -S --noconfirm $missing || log_warn "Pacman install reported errors"
     elif has_cmd zypper; then
-        run_as_root zypper install -y $missing 2>/dev/null || true
+        run_as_root zypper install -y $missing || log_warn "Zypper install reported errors"
     elif has_cmd apk; then
-        run_as_root apk add $missing 2>/dev/null || true
+        run_as_root apk add $missing || log_warn "Apk install reported errors"
     fi
 }
 
