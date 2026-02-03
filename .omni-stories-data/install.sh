@@ -4,6 +4,17 @@
 # Cross-platform, self-healing, production-grade installation system
 # Supports: Linux, macOS (Intel/ARM), Windows (Native/MSYS2/Cygwin/WSL/Git Bash)
 
+# If running via pipe (curl | bash), redirect stdin to /dev/tty to allow interactivity (sudo password, prompts)
+if [ ! -t 0 ] && [ -t 1 ]; then
+    if [ -r /dev/tty ]; then
+        exec 0</dev/tty
+    else
+        echo "Error: Standard input is not a TTY and /dev/tty is not readable."
+        echo "Cannot run interactive installer."
+        exit 1
+    fi
+fi
+
 set -e
 
 # ==============================================================================
@@ -263,6 +274,16 @@ install_system_deps() {
     for bin in git ffmpeg python3 espeak-ng unzip; do
         has_cmd "$bin" || missing="$missing $bin"
     done
+
+    # Check for Python pip module (critical for minimal installs like Docker)
+    if [ -n "$PYTHON_CMD" ] && ! "$PYTHON_CMD" -m pip --version &>/dev/null; then
+        if has_cmd apt-get; then missing="$missing python3-pip"
+        elif has_cmd dnf; then missing="$missing python3-pip"
+        elif has_cmd apk; then missing="$missing py3-pip"
+        elif has_cmd pacman; then missing="$missing python-pip"
+        elif has_cmd zypper; then missing="$missing python3-pip"
+        fi
+    fi
     
     [ -z "$missing" ] && return 0
     

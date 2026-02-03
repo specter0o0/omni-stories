@@ -21,6 +21,7 @@ wheels/
 .installed.cfg
 *.egg
 logs/
+tests/
 
 # Omni-Stories Internal
 .env
