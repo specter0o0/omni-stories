@@ -5,13 +5,13 @@
 # Supports: Linux, macOS (Intel/ARM), Windows (Native/MSYS2/Cygwin/WSL/Git Bash)
 
 # If running via pipe (curl | bash), redirect stdin to /dev/tty to allow interactivity (sudo password, prompts)
+# If running via pipe and we need sudo, cache credentials using TTY to prevent eating script input
 if [ ! -t 0 ] && [ -t 1 ]; then
-    if [ -r /dev/tty ]; then
-        exec 0</dev/tty
-    else
-        echo "Error: Standard input is not a TTY and /dev/tty is not readable."
-        echo "Cannot run interactive installer."
-        exit 1
+    if command -v sudo >/dev/null && sudo -n true 2>&1 | grep -q 'password'; then
+        if [ -r /dev/tty ]; then
+            echo "Requesting sudo privileges for installation..."
+            sudo -v < /dev/tty
+        fi
     fi
 fi
 
@@ -266,6 +266,20 @@ log_ok "Python validated: $PYTHON_VERSION"
 
 log_info "Step 3/7: Installing System Dependencies..."
 
+# Robust sudo wrapper
+run_as_root() {
+    if [ "$EUID" -eq 0 ]; then
+        "$@"
+    elif [ -r /dev/tty ]; then
+        # Piped but TTY available: force TTY for sudo (interactive)
+        sudo "$@" < /dev/tty
+    else
+        # Piped and no TTY: non-interactive sudo to prevent pipe consumption
+        # This will fail if password is required, which is correct for CI
+        sudo -n "$@" < /dev/null
+    fi
+}
+
 install_system_deps() {
     local sys_deps="git ffmpeg python3 espeak-ng unzip"
     local missing=""
@@ -301,34 +315,29 @@ install_system_deps() {
         log_info "Windows detected. Attempting package manager installation..."
         if has_cmd winget; then
             log_info "Using winget..."
-            [ -z "${missing##*python3*}" ] && winget install --silent --accept-package-agreements --accept-source-agreements "Python.Python.3.12" 2>/dev/null || true
-            [ -z "${missing##*ffmpeg*}" ] && winget install --silent --accept-package-agreements --accept-source-agreements "Gyan.FFmpeg" 2>/dev/null || true
-            [ -z "${missing##*git*}" ] && winget install --silent --accept-package-agreements --accept-source-agreements "Git.Git" 2>/dev/null || true
-            [ -z "${missing##*espeak*}" ] && winget install --silent --accept-package-agreements --accept-source-agreements "eSpeak-NG.eSpeak-NG" 2>/dev/null || true
+            # Winget calls need checking, simplistic approach here:
+            for pkg in "Python.Python.3.12" "Gyan.FFmpeg" "Git.Git" "eSpeak-NG.eSpeak-NG"; do
+                 winget install --silent --accept-package-agreements --accept-source-agreements "$pkg" 2>/dev/null || true
+            done
         elif has_cmd choco; then
-            log_info "Using Chocolatey..."
-            [ -z "${missing##*python3*}" ] && choco install -y python 2>/dev/null || true
-            [ -z "${missing##*ffmpeg*}" ] && choco install -y ffmpeg 2>/dev/null || true
-            [ -z "${missing##*git*}" ] && choco install -y git 2>/dev/null || true
-            [ -z "${missing##*espeak*}" ] && choco install -y espeak-ng 2>/dev/null || true
+             for pkg in python ffmpeg git espeak-ng; do
+                 choco install -y "$pkg" 2>/dev/null || true
+             done
         else
             log_warn "No Windows package manager found. Install manually:"
-            log_warn "  Python: https://www.python.org/downloads/"
-            log_warn "  FFmpeg: https://www.gyan.dev/ffmpeg/builds/"
-            log_warn "  Git: https://git-scm.com/download/win"
-            log_warn "  eSpeak-NG: https://github.com/espeak-ng/espeak-ng/releases"
+            log_warn "  Python, FFmpeg, Git, eSpeak-NG"
         fi
     elif has_cmd apt-get; then
-        sudo apt-get update -qq &>/dev/null
-        sudo apt-get install -y $missing libass-dev 2>/dev/null || true
+        run_as_root apt-get update -qq &>/dev/null
+        run_as_root apt-get install -y $missing libass-dev 2>/dev/null || true
     elif has_cmd dnf; then
-        sudo dnf install -y $missing 2>/dev/null || true
+        run_as_root dnf install -y $missing 2>/dev/null || true
     elif has_cmd pacman; then
-        sudo pacman -S --noconfirm $missing 2>/dev/null || true
+        run_as_root pacman -S --noconfirm $missing 2>/dev/null || true
     elif has_cmd zypper; then
-        sudo zypper install -y $missing 2>/dev/null || true
+        run_as_root zypper install -y $missing 2>/dev/null || true
     elif has_cmd apk; then
-        sudo apk add $missing 2>/dev/null || true
+        run_as_root apk add $missing 2>/dev/null || true
     fi
 }
 
@@ -544,16 +553,6 @@ export PYTHONPATH="\$PROJECT_DIR/.omni-stories-data:\$PYTHONPATH"
 
 # Use the exact python interpreter validated during install
 PYTHON_CMD="$abs_py_cmd"
-#!/usr/bin/env bash
-# Omni-Stories Launcher - Dynamically resolves installation path
-
-if [ -f "$HOME/.omni-stories-path" ]; then
-    PROJECT_DIR="$(cat "$HOME/.omni-stories-path")"
-else
-    PROJECT_DIR="$HOME/omni-stories"
-fi
-
-export PYTHONPATH="$PROJECT_DIR/.omni-stories-data:$PYTHONPATH"
 
 if [ ! -x "\$PYTHON_CMD" ]; then
     echo "Error: Python interpreter not found at \$PYTHON_CMD" >&2
